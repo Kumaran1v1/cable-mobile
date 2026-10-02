@@ -1,18 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  Pressable,
   StyleSheet,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StatusBar,
-  Animated,
-  Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
@@ -20,7 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 
 export const LoginScreen = () => {
   const insets = useSafeAreaInsets();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const { login } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
@@ -29,128 +24,15 @@ export const LoginScreen = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Focus states for glowing input borders
+  // Focus state for glowing cyan borders
   const [identifierFocused, setIdentifierFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-
-  // Input references so tapping anywhere on the box immediately focuses the input
-  const identifierInputRef = useRef<any>(null);
-  const passwordInputRef = useRef<any>(null);
-
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const shakeAnim = useRef(new Animated.Value(0)).current;
-  const buttonScale = useRef(new Animated.Value(1)).current;
-
-  // Background floating ambient glow
-  const floatAnim1 = useRef(new Animated.Value(0)).current;
-  const floatAnim2 = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // 1. Entrance Fade & Slide
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // 2. Continuous Glowing Logo Pulse
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 1800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // 3. Ambient Background Floating Spheres
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim1, {
-          toValue: 15,
-          duration: 3500,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatAnim1, {
-          toValue: -15,
-          duration: 3500,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim2, {
-          toValue: -20,
-          duration: 4500,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatAnim2, {
-          toValue: 10,
-          duration: 4500,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, [fadeAnim, slideAnim, pulseAnim, floatAnim1, floatAnim2]);
-
-  // Trigger shake animation on error
-  const triggerShake = () => {
-    shakeAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
-    ]).start();
-  };
-
-  const handlePressIn = () => {
-    Animated.spring(buttonScale, {
-      toValue: 0.96,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(buttonScale, {
-      toValue: 1,
-      friction: 4,
-      useNativeDriver: true,
-    }).start();
-  };
 
   const handleLogin = async () => {
     setErrorMessage(null);
 
     if (!identifier.trim() || !password) {
       setErrorMessage('Please enter both your identifier and password');
-      triggerShake();
       return;
     }
 
@@ -163,47 +45,20 @@ export const LoginScreen = () => {
         err?.message ||
         'Unable to connect to server. Check credentials.';
       setErrorMessage(msg);
-      triggerShake();
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const fillDemoAdmin = () => {
-    setIdentifier('admin');
-    setPassword('admin');
-    setErrorMessage(null);
-  };
-
-  const RootContainer = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
-  const rootProps = Platform.OS === 'ios' ? { behavior: 'padding' as const } : {};
-
   return (
-    <RootContainer style={styles.container} {...rootProps}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Deep Cyber Gradient Background Base - pointerEvents none ensures touches pass through */}
+      {/* Deep Cyber Gradient Background Base - pointerEvents="none" so touches always reach inputs */}
       <View style={styles.deepBg} pointerEvents="none">
-        {/* Glowing Ambient Mesh Orbs */}
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.glowOrbTeal,
-            {
-              transform: [{ translateY: floatAnim1 }],
-            },
-          ]}
-        />
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.glowOrbBlue,
-            {
-              transform: [{ translateY: floatAnim2 }],
-            },
-          ]}
-        />
-        <View style={styles.gridOverlay} pointerEvents="none" />
+        <View style={styles.glowOrbTeal} />
+        <View style={styles.glowOrbBlue} />
+        <View style={styles.gridOverlay} />
       </View>
 
       {/* Floating Theme Mode Toggle */}
@@ -225,36 +80,18 @@ export const LoginScreen = () => {
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        {/* Animated Card with Shake & Fade Physics */}
-        <Animated.View
-          style={[
-            styles.cardContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }, { translateX: shakeAnim }],
-            },
-          ]}>
-          {/* Glowing Animated Brand Emblem */}
-          <Animated.View
-            style={[
-              styles.logoHalo,
-              {
-                transform: [{ scale: pulseAnim }],
-              },
-            ]}>
+        {/* Static Card Container - No transform matrices on parent to ensure native Android IME stability */}
+        <View style={styles.cardContainer}>
+          {/* Brand Emblem */}
+          <View style={styles.logoHalo}>
             <View style={styles.logoBadge}>
               <Text style={styles.logoIcon}>📡</Text>
             </View>
-          </Animated.View>
+          </View>
 
           {/* Header Typography */}
           <Text style={styles.appTitle}>Cable Connect</Text>
           <Text style={styles.appSubtitle}>Network & Field Collection Portal</Text>
-
-          {/* Quick Demo Pill */}
-          <TouchableOpacity style={styles.demoPill} onPress={fillDemoAdmin} activeOpacity={0.8}>
-            <Text style={styles.demoPillText}>⚡ Auto-fill Admin Login</Text>
-          </TouchableOpacity>
 
           {/* Error Banner */}
           {errorMessage && (
@@ -264,18 +101,16 @@ export const LoginScreen = () => {
             </View>
           )}
 
-          {/* Input 1: Identifier / Mobile / Email */}
+          {/* Input 1: Identifier / Username / Mobile */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>IDENTIFIER / USERNAME / MOBILE</Text>
-            <Pressable
+            <View
               style={[
                 styles.inputWrapper,
                 identifierFocused && styles.inputWrapperFocused,
-              ]}
-              onPress={() => identifierInputRef.current?.focus()}>
+              ]}>
               <Text style={styles.inputIcon}>👤</Text>
               <TextInput
-                ref={identifierInputRef}
                 style={styles.textInput}
                 placeholder="e.g. admin or 9876543210"
                 placeholderTextColor="#64748b"
@@ -283,28 +118,23 @@ export const LoginScreen = () => {
                 onChangeText={setIdentifier}
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoComplete="off"
                 underlineColorAndroid="transparent"
-                importantForAutofill="no"
-                textContentType="none"
                 onFocus={() => setIdentifierFocused(true)}
                 onBlur={() => setIdentifierFocused(false)}
               />
-            </Pressable>
+            </View>
           </View>
 
           {/* Input 2: Password */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>PASSWORD</Text>
-            <Pressable
+            <View
               style={[
                 styles.inputWrapper,
                 passwordFocused && styles.inputWrapperFocused,
-              ]}
-              onPress={() => passwordInputRef.current?.focus()}>
+              ]}>
               <Text style={styles.inputIcon}>🔒</Text>
               <TextInput
-                ref={passwordInputRef}
                 style={styles.textInput}
                 placeholder="Enter your password"
                 placeholderTextColor="#64748b"
@@ -313,10 +143,7 @@ export const LoginScreen = () => {
                 onChangeText={setPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoComplete="off"
                 underlineColorAndroid="transparent"
-                importantForAutofill="no"
-                textContentType="none"
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
               />
@@ -335,28 +162,24 @@ export const LoginScreen = () => {
                   </Text>
                 </View>
               </TouchableOpacity>
-            </Pressable>
+            </View>
           </View>
 
-          {/* Animated Login Action Button */}
-          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-            <TouchableOpacity
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-              onPress={handleLogin}
-              onPressIn={handlePressIn}
-              onPressOut={handlePressOut}
-              disabled={isSubmitting}
-              activeOpacity={0.9}>
-              {isSubmitting ? (
-                <View style={styles.btnLoadingRow}>
-                  <ActivityIndicator color="#0f172a" size="small" />
-                  <Text style={styles.submitButtonTextLoading}>Verifying...</Text>
-                </View>
-              ) : (
-                <Text style={styles.submitButtonText}>Sign In to Dashboard →</Text>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
+          {/* Sign In Button */}
+          <TouchableOpacity
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+            onPress={handleLogin}
+            disabled={isSubmitting}
+            activeOpacity={0.85}>
+            {isSubmitting ? (
+              <View style={styles.btnLoadingRow}>
+                <ActivityIndicator color="#0f172a" size="small" />
+                <Text style={styles.submitButtonTextLoading}>Verifying...</Text>
+              </View>
+            ) : (
+              <Text style={styles.submitButtonText}>Sign In to Dashboard →</Text>
+            )}
+          </TouchableOpacity>
 
           {/* Footer Security Badges */}
           <View style={styles.securityRow}>
@@ -364,9 +187,9 @@ export const LoginScreen = () => {
             <Text style={styles.securityDot}>•</Text>
             <Text style={styles.securityText}>Live Render API</Text>
           </View>
-        </Animated.View>
+        </View>
       </ScrollView>
-    </RootContainer>
+    </View>
   );
 };
 
@@ -484,22 +307,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     marginTop: 4,
-    marginBottom: 16,
-  },
-  demoPill: {
-    alignSelf: 'center',
-    backgroundColor: 'rgba(45, 212, 191, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(45, 212, 191, 0.35)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
     marginBottom: 20,
-  },
-  demoPillText: {
-    color: '#2dd4bf',
-    fontSize: 12,
-    fontWeight: '700',
   },
   errorBox: {
     flexDirection: 'row',
