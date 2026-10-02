@@ -301,8 +301,18 @@ export const LoginScreen = () => {
               />
               <TouchableOpacity
                 style={styles.eyeBtn}
-                onPress={() => setShowPassword(!showPassword)}>
-                <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '🙈'}</Text>
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <View style={styles.eyeIconContainer}>
+                  <View style={[styles.eyeOuter, showPassword && styles.eyeOuterActive]}>
+                    <View style={[styles.eyePupil, showPassword && styles.eyePupilActive]} />
+                    {!showPassword && <View style={styles.eyeSlash} />}
+                  </View>
+                  <Text style={[styles.eyeLabel, showPassword && styles.eyeLabelActive]}>
+                    {showPassword ? 'HIDE' : 'SHOW'}
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -531,10 +541,59 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   eyeBtn: {
-    padding: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  eyeIcon: {
-    fontSize: 16,
+  eyeIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  eyeOuter: {
+    width: 20,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1.8,
+    borderColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  eyeOuterActive: {
+    borderColor: '#2dd4bf',
+    backgroundColor: 'rgba(45, 212, 191, 0.12)',
+  },
+  eyePupil: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#94a3b8',
+  },
+  eyePupilActive: {
+    backgroundColor: '#2dd4bf',
+  },
+  eyeSlash: {
+    position: 'absolute',
+    width: 22,
+    height: 1.8,
+    backgroundColor: '#f43f5e',
+    transform: [{ rotate: '-45deg' }],
+  },
+  eyeLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+  },
+  eyeLabelActive: {
+    color: '#2dd4bf',
   },
   submitButton: {
     backgroundColor: '#2dd4bf',
