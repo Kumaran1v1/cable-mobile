@@ -1,6 +1,8 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { CollectionScreen } from '../screens/collection/CollectionScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
@@ -8,19 +10,26 @@ import { ProfileScreen } from '../screens/profile/ProfileScreen';
 const Tab = createBottomTabNavigator();
 
 export const MainTabs = () => {
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+
+  const bottomPadding = Math.max(insets.bottom, 8);
+  const tabHeight = 56 + bottomPadding;
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#64748b',
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: '#ffffff',
+          backgroundColor: colors.tabBarBg,
           borderTopWidth: 1,
-          borderTopColor: '#e2e8f0',
-          height: 60,
-          paddingBottom: 8,
+          borderTopColor: colors.cardBorder,
+          height: tabHeight,
+          paddingBottom: bottomPadding,
           paddingTop: 6,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 12,

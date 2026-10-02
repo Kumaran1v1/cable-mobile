@@ -10,7 +10,10 @@ import {
   RefreshControl,
   Linking,
   Alert,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../context/ThemeContext';
 import { dashboardApi } from '../../api/dashboardApi';
 import { DashboardSummaryData, UnpaidCustomerItem } from '../../types/dashboard.types';
 import {
@@ -23,6 +26,9 @@ import { WhatsAppReminderModal } from '../../components/WhatsAppReminderModal';
 import { MonthlyEntryModal } from '../../components/MonthlyEntryModal';
 
 export const DashboardScreen = () => {
+  const insets = useSafeAreaInsets();
+  const { colors, isDark, toggleTheme } = useTheme();
+
   const currentMonthStr = getCurrentMonthString();
   const currentYear = currentMonthStr.split('-')[0];
 
@@ -37,22 +43,25 @@ export const DashboardScreen = () => {
   const [whatsAppModalCust, setWhatsAppModalCust] = useState<UnpaidCustomerItem | null>(null);
   const [entryModalCust, setEntryModalCust] = useState<UnpaidCustomerItem | null>(null);
 
-  const fetchSummary = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const fetchSummary = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
 
-    try {
-      const res = await dashboardApi.getSummary(selectedYear, selectedMonth);
-      if (res.success && res.data) {
-        setData(res.data);
+      try {
+        const res = await dashboardApi.getSummary(selectedYear, selectedMonth);
+        if (res.success && res.data) {
+          setData(res.data);
+        }
+      } catch (err: any) {
+        Alert.alert('Error', err?.response?.data?.message || err?.message || 'Failed to load dashboard');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message || err?.message || 'Failed to load dashboard');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [selectedYear, selectedMonth]);
+    },
+    [selectedYear, selectedMonth]
+  );
 
   useEffect(() => {
     fetchSummary();
@@ -85,78 +94,145 @@ export const DashboardScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Month Navigator Header */}
-      <View style={styles.navHeader}>
-        <TouchableOpacity style={styles.navArrow} onPress={handlePrevMonth}>
-          <Text style={styles.navArrowText}>‹</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      {/* Top Safe Area Navigator Header */}
+      <View
+        style={[
+          styles.navHeader,
+          {
+            paddingTop: Math.max(insets.top, 12),
+            backgroundColor: colors.headerBg,
+            borderBottomColor: colors.cardBorder,
+          },
+        ]}>
+        <TouchableOpacity
+          style={[styles.navArrow, { backgroundColor: colors.chipBg }]}
+          onPress={handlePrevMonth}>
+          <Text style={[styles.navArrowText, { color: colors.primary }]}>‹</Text>
         </TouchableOpacity>
 
         <View style={styles.navTitleContainer}>
-          <Text style={styles.navMonthText}>{formatMonthYear(selectedMonth)}</Text>
-          <Text style={styles.navSubText}>Summary & Collections</Text>
+          <Text style={[styles.navMonthText, { color: colors.text }]}>
+            {formatMonthYear(selectedMonth)}
+          </Text>
+          <Text style={[styles.navSubText, { color: colors.textSecondary }]}>
+            Performance & Collections
+          </Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.navArrow, selectedMonth >= currentMonthStr && styles.navArrowDisabled]}
-          onPress={handleNextMonth}
-          disabled={selectedMonth >= currentMonthStr}>
-          <Text
+        <View style={styles.navRightRow}>
+          <TouchableOpacity
             style={[
-              styles.navArrowText,
-              selectedMonth >= currentMonthStr && styles.navArrowTextDisabled,
-            ]}>
-            ›
-          </Text>
-        </TouchableOpacity>
+              styles.navArrow,
+              { backgroundColor: colors.chipBg },
+              selectedMonth >= currentMonthStr && styles.navArrowDisabled,
+            ]}
+            onPress={handleNextMonth}
+            disabled={selectedMonth >= currentMonthStr}>
+            <Text
+              style={[
+                styles.navArrowText,
+                { color: selectedMonth >= currentMonthStr ? colors.textMuted : colors.primary },
+              ]}>
+              ›
+            </Text>
+          </TouchableOpacity>
+
+          {/* Dark Mode Toggle */}
+          <TouchableOpacity
+            style={[styles.themeBtn, { backgroundColor: colors.chipBg }]}
+            onPress={toggleTheme}>
+            <Text style={{ fontSize: 16 }}>{isDark ? '☀️' : '🌙'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 32 }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => fetchSummary(true)} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchSummary(true)}
+            tintColor={colors.primary}
+          />
         }>
         {loading && !refreshing ? (
           <View style={styles.loaderBox}>
-            <ActivityIndicator size="large" color="#2563eb" />
-            <Text style={styles.loaderText}>Loading dashboard metrics...</Text>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loaderText, { color: colors.textSecondary }]}>
+              Loading dashboard metrics...
+            </Text>
           </View>
         ) : (
           <>
             {/* KPI Cards Grid */}
             <View style={styles.kpiGrid}>
               {/* Card 1: Total Subscribers */}
-              <View style={[styles.kpiCard, styles.kpiBlue]}>
-                <Text style={styles.kpiLabel}>Total Subscribers</Text>
-                <Text style={styles.kpiValue}>{data?.customerCount || 0}</Text>
-                <Text style={styles.kpiSub}>Registered customers</Text>
+              <View
+                style={[
+                  styles.kpiCard,
+                  { backgroundColor: isDark ? '#172554' : '#eff6ff', borderLeftColor: colors.primary },
+                ]}>
+                <Text style={[styles.kpiLabel, { color: isDark ? '#93c5fd' : '#475569' }]}>
+                  Total Subscribers
+                </Text>
+                <Text style={[styles.kpiValue, { color: isDark ? '#ffffff' : '#0f172a' }]}>
+                  {data?.customerCount || 0}
+                </Text>
+                <Text style={[styles.kpiSub, { color: isDark ? '#bfdbfe' : '#64748b' }]}>
+                  Registered customers
+                </Text>
               </View>
 
               {/* Card 2: This Month Collected */}
-              <View style={[styles.kpiCard, styles.kpiGreen]}>
-                <Text style={styles.kpiLabel}>Collected This Month</Text>
-                <Text style={styles.kpiValue}>
+              <View
+                style={[
+                  styles.kpiCard,
+                  { backgroundColor: isDark ? '#052e16' : '#f0fdf4', borderLeftColor: colors.success },
+                ]}>
+                <Text style={[styles.kpiLabel, { color: isDark ? '#86efac' : '#475569' }]}>
+                  Collected This Month
+                </Text>
+                <Text style={[styles.kpiValue, { color: isDark ? '#ffffff' : '#0f172a' }]}>
                   {formatCurrency(data?.currentMonthCollection || 0)}
                 </Text>
-                <Text style={styles.kpiSub}>{data?.paidCustomersCount || 0} Paid customers</Text>
+                <Text style={[styles.kpiSub, { color: isDark ? '#bbf7d0' : '#64748b' }]}>
+                  {data?.paidCustomersCount || 0} Paid customers
+                </Text>
               </View>
 
               {/* Card 3: This Month Pending */}
-              <View style={[styles.kpiCard, styles.kpiRed]}>
-                <Text style={styles.kpiLabel}>Pending This Month</Text>
-                <Text style={styles.kpiValue}>
+              <View
+                style={[
+                  styles.kpiCard,
+                  { backgroundColor: isDark ? '#450a0a' : '#fef2f2', borderLeftColor: colors.danger },
+                ]}>
+                <Text style={[styles.kpiLabel, { color: isDark ? '#fca5a5' : '#475569' }]}>
+                  Pending This Month
+                </Text>
+                <Text style={[styles.kpiValue, { color: isDark ? '#ffffff' : '#0f172a' }]}>
                   {formatCurrency(data?.currentMonthPendingAmount || 0)}
                 </Text>
-                <Text style={styles.kpiSub}>{data?.thisMonthNotPaidCount || 0} Unpaid customers</Text>
+                <Text style={[styles.kpiSub, { color: isDark ? '#fecaca' : '#64748b' }]}>
+                  {data?.thisMonthNotPaidCount || 0} Unpaid customers
+                </Text>
               </View>
 
               {/* Card 4: 1-Year Total Collection */}
-              <View style={[styles.kpiCard, styles.kpiPurple]}>
-                <Text style={styles.kpiLabel}>1-Year Total Collection</Text>
-                <Text style={styles.kpiValue}>
+              <View
+                style={[
+                  styles.kpiCard,
+                  { backgroundColor: isDark ? '#3b0764' : '#faf5ff', borderLeftColor: '#9333ea' },
+                ]}>
+                <Text style={[styles.kpiLabel, { color: isDark ? '#d8b4fe' : '#475569' }]}>
+                  1-Year Total Collection
+                </Text>
+                <Text style={[styles.kpiValue, { color: isDark ? '#ffffff' : '#0f172a' }]}>
                   {formatCurrency(data?.oneYearCollection || 0)}
                 </Text>
-                <Text style={styles.kpiSub}>
+                <Text style={[styles.kpiSub, { color: isDark ? '#e9d5ff' : '#64748b' }]}>
                   Pending: {formatCurrency(data?.oneYearPendingAmount || 0)}
                 </Text>
               </View>
@@ -164,28 +240,48 @@ export const DashboardScreen = () => {
 
             {/* Monthly Trend List */}
             {data?.monthlyOverview && data.monthlyOverview.length > 0 && (
-              <View style={styles.sectionCard}>
-                <Text style={styles.sectionTitle}>Monthly Overview ({selectedYear})</Text>
+              <View
+                style={[
+                  styles.sectionCard,
+                  { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                ]}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Monthly Overview ({selectedYear})
+                </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.overviewScroll}>
                   {data.monthlyOverview.map((item) => (
                     <View
                       key={item.month}
                       style={[
                         styles.overviewItem,
-                        item.month === selectedMonth && styles.overviewItemActive,
+                        {
+                          backgroundColor:
+                            item.month === selectedMonth
+                              ? isDark ? '#1e293b' : '#eff6ff'
+                              : colors.chipBg,
+                          borderColor:
+                            item.month === selectedMonth ? colors.primary : colors.cardBorder,
+                        },
                       ]}>
                       <Text
                         style={[
                           styles.overviewMonthName,
-                          item.month === selectedMonth && styles.overviewMonthNameActive,
+                          {
+                            color:
+                              item.month === selectedMonth ? colors.primary : colors.text,
+                          },
                         ]}>
                         {item.short}
                       </Text>
-                      <Text style={styles.overviewCollected}>{formatCurrency(item.collected)}</Text>
+                      <Text style={[styles.overviewCollected, { color: colors.success }]}>
+                        {formatCurrency(item.collected)}
+                      </Text>
                       {item.pending > 0 && (
-                        <Text style={styles.overviewPending}>Due: {formatCurrency(item.pending)}</Text>
+                        <Text style={[styles.overviewPending, { color: colors.danger }]}>
+                          Due: {formatCurrency(item.pending)}
+                        </Text>
                       )}
-                      <Text style={styles.overviewCount}>
+                      <Text style={[styles.overviewCount, { color: colors.textMuted }]}>
                         {item.paidCount} paid • {item.pendingCount} due
                       </Text>
                     </View>
@@ -195,56 +291,82 @@ export const DashboardScreen = () => {
             )}
 
             {/* Unpaid Customers Section */}
-            <View style={styles.sectionCard}>
+            <View
+              style={[
+                styles.sectionCard,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}>
               <View style={styles.unpaidHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Unpaid Subscribers</Text>
-                  <Text style={styles.sectionSub}>
-                    {filteredUnpaid.length} customers with pending balance for {formatMonthYear(selectedMonth)}
-                  </Text>
-                </View>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Unpaid Subscribers
+                </Text>
+                <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
+                  {filteredUnpaid.length} customers with pending balance for {formatMonthYear(selectedMonth)}
+                </Text>
               </View>
 
               {/* Search Bar */}
               <TextInput
-                style={styles.searchInput}
+                style={[
+                  styles.searchInput,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.inputBorder,
+                    color: colors.text,
+                  },
+                ]}
                 placeholder="Search unpaid by name or mobile..."
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
 
               {filteredUnpaid.length === 0 ? (
                 <View style={styles.emptyBox}>
-                  <Text style={styles.emptyText}>🎉 No pending customers found for this month!</Text>
+                  <Text style={[styles.emptyText, { color: colors.success }]}>
+                    🎉 No pending customers found for this month!
+                  </Text>
                 </View>
               ) : (
                 filteredUnpaid.map((cust) => (
-                  <View key={cust._id} style={styles.custCard}>
+                  <View
+                    key={cust._id}
+                    style={[
+                      styles.custCard,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.cardBorder,
+                      },
+                    ]}>
                     <View style={styles.custInfo}>
-                      <Text style={styles.custName}>{cust.name}</Text>
-                      <Text style={styles.custMobile}>{cust.mobile}</Text>
-                      <Text style={styles.custDue}>Due: {formatCurrency(cust.amount || 300)}</Text>
+                      <Text style={[styles.custName, { color: colors.text }]}>{cust.name}</Text>
+                      <Text style={[styles.custMobile, { color: colors.textSecondary }]}>
+                        {cust.mobile}
+                      </Text>
+                      <Text style={[styles.custDue, { color: colors.danger }]}>
+                        Due: {formatCurrency(cust.amount || 300)}
+                      </Text>
                     </View>
 
                     <View style={styles.actionRow}>
-                      {/* Call Button */}
                       <TouchableOpacity
-                        style={styles.callActionBtn}
+                        style={[styles.callActionBtn, { backgroundColor: colors.chipBg }]}
                         onPress={() => handleCall(cust.mobile)}>
-                        <Text style={styles.actionBtnText}>📞 Call</Text>
+                        <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>
+                          📞 Call
+                        </Text>
                       </TouchableOpacity>
 
-                      {/* WhatsApp Reminder Button */}
                       <TouchableOpacity
-                        style={styles.whatsappActionBtn}
+                        style={[styles.whatsappActionBtn, { backgroundColor: colors.successBg }]}
                         onPress={() => setWhatsAppModalCust(cust)}>
-                        <Text style={styles.whatsappActionText}>💬 WhatsApp</Text>
+                        <Text style={[styles.whatsappActionText, { color: colors.success }]}>
+                          💬 WhatsApp
+                        </Text>
                       </TouchableOpacity>
 
-                      {/* Collect Button */}
                       <TouchableOpacity
-                        style={styles.collectActionBtn}
+                        style={[styles.collectActionBtn, { backgroundColor: colors.primary }]}
                         onPress={() => setEntryModalCust(cust)}>
                         <Text style={styles.collectActionText}>₹ Collect</Text>
                       </TouchableOpacity>
@@ -288,55 +410,56 @@ export const DashboardScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
   },
   navHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
     elevation: 2,
   },
   navArrow: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#eff6ff',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   navArrowDisabled: {
-    backgroundColor: '#f1f5f9',
+    opacity: 0.3,
   },
   navArrowText: {
-    fontSize: 26,
-    color: '#2563eb',
+    fontSize: 24,
     fontWeight: '700',
-    lineHeight: 30,
-  },
-  navArrowTextDisabled: {
-    color: '#cbd5e1',
+    lineHeight: 28,
   },
   navTitleContainer: {
     alignItems: 'center',
   },
   navMonthText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#0f172a',
   },
   navSubText: {
-    fontSize: 12,
-    color: '#64748b',
+    fontSize: 11,
     marginTop: 1,
+  },
+  navRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  themeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 32,
   },
   loaderBox: {
     padding: 40,
@@ -344,7 +467,6 @@ const styles = StyleSheet.create({
   },
   loaderText: {
     marginTop: 12,
-    color: '#64748b',
     fontSize: 14,
   },
   kpiGrid: {
@@ -359,57 +481,33 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     elevation: 2,
-  },
-  kpiBlue: {
-    backgroundColor: '#eff6ff',
     borderLeftWidth: 4,
-    borderLeftColor: '#2563eb',
-  },
-  kpiGreen: {
-    backgroundColor: '#f0fdf4',
-    borderLeftWidth: 4,
-    borderLeftColor: '#16a34a',
-  },
-  kpiRed: {
-    backgroundColor: '#fef2f2',
-    borderLeftWidth: 4,
-    borderLeftColor: '#dc2626',
-  },
-  kpiPurple: {
-    backgroundColor: '#faf5ff',
-    borderLeftWidth: 4,
-    borderLeftColor: '#9333ea',
   },
   kpiLabel: {
     fontSize: 12,
-    color: '#475569',
     fontWeight: '600',
   },
   kpiValue: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#0f172a',
     marginVertical: 4,
   },
   kpiSub: {
     fontSize: 11,
-    color: '#64748b',
   },
   sectionCard: {
-    backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
     elevation: 2,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0f172a',
   },
   sectionSub: {
     fontSize: 12,
-    color: '#64748b',
     marginTop: 2,
   },
   overviewScroll: {
@@ -418,53 +516,37 @@ const styles = StyleSheet.create({
   },
   overviewItem: {
     width: 100,
-    backgroundColor: '#f8fafc',
     borderRadius: 10,
     padding: 10,
     marginRight: 10,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  overviewItemActive: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#2563eb',
   },
   overviewMonthName: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#334155',
-  },
-  overviewMonthNameActive: {
-    color: '#2563eb',
   },
   overviewCollected: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#15803d',
     marginTop: 4,
   },
   overviewPending: {
     fontSize: 11,
-    color: '#b91c1c',
     marginTop: 2,
   },
   overviewCount: {
     fontSize: 10,
-    color: '#64748b',
     marginTop: 4,
   },
   unpaidHeader: {
     marginBottom: 12,
   },
   searchInput: {
-    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 14,
-    color: '#0f172a',
     marginBottom: 12,
   },
   emptyBox: {
@@ -473,16 +555,13 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#15803d',
     fontWeight: '600',
   },
   custCard: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
     borderRadius: 10,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: '#ffffff',
   },
   custInfo: {
     marginBottom: 8,
@@ -490,17 +569,14 @@ const styles = StyleSheet.create({
   custName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0f172a',
   },
   custMobile: {
     fontSize: 13,
-    color: '#64748b',
     marginTop: 1,
   },
   custDue: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#dc2626',
     marginTop: 2,
   },
   actionRow: {
@@ -512,31 +588,26 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 7,
     borderRadius: 6,
-    backgroundColor: '#f1f5f9',
     alignItems: 'center',
   },
   actionBtnText: {
     fontSize: 12,
-    color: '#334155',
     fontWeight: '600',
   },
   whatsappActionBtn: {
     flex: 1.4,
     paddingVertical: 7,
     borderRadius: 6,
-    backgroundColor: '#dcfce7',
     alignItems: 'center',
   },
   whatsappActionText: {
     fontSize: 12,
-    color: '#15803d',
     fontWeight: '700',
   },
   collectActionBtn: {
     flex: 1.2,
     paddingVertical: 7,
     borderRadius: 6,
-    backgroundColor: '#2563eb',
     alignItems: 'center',
   },
   collectActionText: {

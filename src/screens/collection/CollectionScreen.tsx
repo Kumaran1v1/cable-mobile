@@ -9,8 +9,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../context/ThemeContext';
 import { collectionApi } from '../../api/collectionApi';
 import { GridCustomer, MonthlyEntry, Customer } from '../../types/collection.types';
 import { formatCurrency, formatMonthYear, getCurrentMonthString } from '../../utils/format';
@@ -18,29 +21,32 @@ import { CreateCustomerModal } from '../../components/CreateCustomerModal';
 import { EditCustomerModal } from '../../components/EditCustomerModal';
 import { MonthlyEntryModal } from '../../components/MonthlyEntryModal';
 
-const MONTH_TABS = [
-  { num: '01', short: 'Jan' },
-  { num: '02', short: 'Feb' },
-  { num: '03', short: 'Mar' },
-  { num: '04', short: 'Apr' },
-  { num: '05', short: 'May' },
-  { num: '06', short: 'Jun' },
-  { num: '07', short: 'Jul' },
-  { num: '08', short: 'Aug' },
-  { num: '09', short: 'Sep' },
-  { num: '10', short: 'Oct' },
-  { num: '11', short: 'Nov' },
-  { num: '12', short: 'Dec' },
+const MONTH_NAMES = [
+  { num: '01', short: 'Jan', full: 'January' },
+  { num: '02', short: 'Feb', full: 'February' },
+  { num: '03', short: 'Mar', full: 'March' },
+  { num: '04', short: 'Apr', full: 'April' },
+  { num: '05', short: 'May', full: 'May' },
+  { num: '06', short: 'Jun', full: 'June' },
+  { num: '07', short: 'Jul', full: 'July' },
+  { num: '08', short: 'Aug', full: 'August' },
+  { num: '09', short: 'Sep', full: 'September' },
+  { num: '10', short: 'Oct', full: 'October' },
+  { num: '11', short: 'Nov', full: 'November' },
+  { num: '12', short: 'Dec', full: 'December' },
 ];
 
 export const CollectionScreen = () => {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const currentMonthStr = getCurrentMonthString();
-  const currentYear = currentMonthStr.split('-')[0];
-  const currentMonthNum = currentMonthStr.split('-')[1];
+  const { colors, isDark, toggleTheme } = useTheme();
+
+  const currentSystemDate = new Date();
+  const currentYear = currentSystemDate.getFullYear().toString();
+  const currentMonthNum = String(currentSystemDate.getMonth() + 1).padStart(2, '0');
+  const currentYearMonth = `${currentYear}-${currentMonthNum}`;
 
   const [selectedYear, setSelectedYear] = useState<string>(currentYear);
-  const [selectedMonthNum, setSelectedMonthNum] = useState<string>(currentMonthNum);
   const [customers, setCustomers] = useState<GridCustomer[]>([]);
   const [monthSummaries, setMonthSummaries] = useState<
     Record<string, { totalAmount: number; totalPaid: number; totalPending: number }>
@@ -69,8 +75,6 @@ export const CollectionScreen = () => {
     existingEntry: null,
   });
 
-  const selectedFullMonth = `${selectedYear}-${selectedMonthNum}`;
-
   const fetchGridData = useCallback(
     async (isRefresh = false) => {
       if (isRefresh) setRefreshing(true);
@@ -94,7 +98,19 @@ export const CollectionScreen = () => {
     fetchGridData();
   }, [fetchGridData]);
 
-  // Filter customers by search and payment status for the selected month
+  // Year navigation
+  const handlePrevYear = () => {
+    const prev = (parseInt(selectedYear, 10) - 1).toString();
+    setSelectedYear(prev);
+  };
+
+  const handleNextYear = () => {
+    const nextNum = parseInt(selectedYear, 10) + 1;
+    if (nextNum > parseInt(currentYear, 10)) return;
+    setSelectedYear(nextNum.toString());
+  };
+
+  // Filter customers by search and status
   const filteredCustomers = useMemo(() => {
     let result = customers;
 
@@ -106,8 +122,9 @@ export const CollectionScreen = () => {
     }
 
     if (statusFilter !== 'all') {
+      const activeMonthKey = selectedYear === currentYear ? currentYearMonth : `${selectedYear}-12`;
       result = result.filter((c) => {
-        const entry = c.entries?.[selectedFullMonth];
+        const entry = c.entries?.[activeMonthKey];
         const isPaid = entry?.paymentStatus === 'PAID';
         if (statusFilter === 'paid') return isPaid;
         if (statusFilter === 'pending') return !isPaid;
@@ -116,22 +133,22 @@ export const CollectionScreen = () => {
     }
 
     return result;
-  }, [customers, searchQuery, statusFilter, selectedFullMonth]);
+  }, [customers, searchQuery, statusFilter, selectedYear, currentYear, currentYearMonth]);
 
-  const currentSummary = monthSummaries[selectedFullMonth] || {
-    totalAmount: 0,
-    totalPaid: 0,
-    totalPending: 0,
-  };
+  // Handle cell click on a specific month for a customer
+  const handleCellClick = (customer: GridCustomer, monthStr: string) => {
+    if (monthStr > currentYearMonth) {
+      Alert.alert('Future Month', 'Cannot record entries for future months.');
+      return;
+    }
 
-  const handleOpenEntry = (cust: GridCustomer) => {
-    const existing = cust.entries?.[selectedFullMonth] || null;
+    const existing = customer.entries?.[monthStr] || null;
     setEntryModalState({
       visible: true,
-      customerId: cust._id,
-      customerName: cust.name,
-      customerMobile: cust.mobile,
-      month: selectedFullMonth,
+      customerId: customer._id,
+      customerName: customer.name,
+      customerMobile: customer.mobile,
+      month: monthStr,
       existingEntry: existing,
     });
   };
@@ -145,172 +162,287 @@ export const CollectionScreen = () => {
     };
     navigation.navigate('CustomerHistory', {
       customer: customerObj,
-      initialMonth: selectedFullMonth,
+      initialMonth: currentYearMonth,
     });
   };
 
+  // Active year totals
+  const yearTotalPaid = useMemo(() => {
+    return Object.values(monthSummaries).reduce((acc, m) => acc + (m.totalPaid || 0), 0);
+  }, [monthSummaries]);
+
+  const yearTotalPending = useMemo(() => {
+    return Object.values(monthSummaries).reduce((acc, m) => acc + (m.totalPending || 0), 0);
+  }, [monthSummaries]);
+
   return (
-    <View style={styles.container}>
-      {/* Top Header & Year Selector */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Monthly Collections</Text>
-          <Text style={styles.headerSub}>{formatMonthYear(selectedFullMonth)}</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      {/* Top Safe Area Header (Status Bar aware) */}
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: Math.max(insets.top, 12),
+            backgroundColor: colors.headerBg,
+            borderBottomColor: colors.cardBorder,
+          },
+        ]}>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Calendar Collections</Text>
+          <View style={styles.yearRow}>
+            <TouchableOpacity style={styles.yearArrow} onPress={handlePrevYear}>
+              <Text style={[styles.yearArrowText, { color: colors.primary }]}>‹</Text>
+            </TouchableOpacity>
+            <Text style={[styles.yearText, { color: colors.primary }]}>{selectedYear}</Text>
+            <TouchableOpacity
+              style={[
+                styles.yearArrow,
+                selectedYear >= currentYear && styles.yearArrowDisabled,
+              ]}
+              onPress={handleNextYear}
+              disabled={selectedYear >= currentYear}>
+              <Text
+                style={[
+                  styles.yearArrowText,
+                  { color: selectedYear >= currentYear ? colors.textMuted : colors.primary },
+                ]}>
+                ›
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <TouchableOpacity style={styles.addBtn} onPress={() => setCreateModalVisible(true)}>
-          <Text style={styles.addBtnText}>+ Add Customer</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.headerRight}>
+          {/* Dark Mode Toggle Button */}
+          <TouchableOpacity
+            style={[styles.themeBtn, { backgroundColor: colors.chipBg }]}
+            onPress={toggleTheme}>
+            <Text style={{ fontSize: 16 }}>{isDark ? '☀️' : '🌙'}</Text>
+          </TouchableOpacity>
 
-      {/* Month Tabs Bar */}
-      <View style={styles.monthTabsContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.monthTabsScroll}>
-          {MONTH_TABS.map((tab) => {
-            const isActive = tab.num === selectedMonthNum;
-            return (
-              <TouchableOpacity
-                key={tab.num}
-                style={[styles.monthTab, isActive && styles.monthTabActive]}
-                onPress={() => setSelectedMonthNum(tab.num)}>
-                <Text style={[styles.monthTabText, isActive && styles.monthTabTextActive]}>
-                  {tab.short}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Monthly Collection Summary Strip */}
-      <View style={styles.summaryStrip}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Total Target</Text>
-          <Text style={styles.summaryValue}>{formatCurrency(currentSummary.totalAmount)}</Text>
+          {/* Add Customer Button */}
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: colors.primary }]}
+            onPress={() => setCreateModalVisible(true)}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
         </View>
+      </View>
+
+      {/* Year Financial Summary Strip */}
+      <View
+        style={[
+          styles.summaryStrip,
+          { backgroundColor: colors.card, borderBottomColor: colors.cardBorder },
+        ]}>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Collected</Text>
-          <Text style={[styles.summaryValue, styles.summaryPaid]}>
-            {formatCurrency(currentSummary.totalPaid)}
+          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Subscribers</Text>
+          <Text style={[styles.summaryVal, { color: colors.text }]}>{customers.length}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Year Collected</Text>
+          <Text style={[styles.summaryVal, { color: colors.success }]}>
+            {formatCurrency(yearTotalPaid)}
           </Text>
         </View>
+        <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Pending</Text>
-          <Text style={[styles.summaryValue, styles.summaryPending]}>
-            {formatCurrency(currentSummary.totalPending)}
+          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Year Pending</Text>
+          <Text style={[styles.summaryVal, { color: colors.danger }]}>
+            {formatCurrency(yearTotalPending)}
           </Text>
         </View>
       </View>
 
-      {/* Search & Filter Controls */}
-      <View style={styles.filterSection}>
+      {/* Search & Filter Bar */}
+      <View
+        style={[
+          styles.filterBox,
+          { backgroundColor: colors.card, borderBottomColor: colors.cardBorder },
+        ]}>
         <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name or 10-digit mobile..."
-          placeholderTextColor="#94a3b8"
+          style={[
+            styles.searchInput,
+            {
+              backgroundColor: colors.inputBg,
+              borderColor: colors.inputBorder,
+              color: colors.text,
+            },
+          ]}
+          placeholder="Search by subscriber name or 10-digit mobile..."
+          placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
 
-        <View style={styles.filterRow}>
+        <View style={styles.filterChipRow}>
           <TouchableOpacity
-            style={[styles.filterChip, statusFilter === 'all' && styles.filterChipActive]}
+            style={[
+              styles.filterChip,
+              { backgroundColor: statusFilter === 'all' ? colors.chipActiveBg : colors.chipBg },
+            ]}
             onPress={() => setStatusFilter('all')}>
-            <Text style={[styles.filterChipText, statusFilter === 'all' && styles.filterChipTextActive]}>
+            <Text
+              style={[
+                styles.filterChipText,
+                { color: statusFilter === 'all' ? '#ffffff' : colors.textSecondary },
+              ]}>
               All ({customers.length})
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, statusFilter === 'paid' && styles.filterChipActive]}
+            style={[
+              styles.filterChip,
+              { backgroundColor: statusFilter === 'paid' ? colors.success : colors.chipBg },
+            ]}
             onPress={() => setStatusFilter('paid')}>
-            <Text style={[styles.filterChipText, statusFilter === 'paid' && styles.filterChipTextActive]}>
+            <Text
+              style={[
+                styles.filterChipText,
+                { color: statusFilter === 'paid' ? '#ffffff' : colors.textSecondary },
+              ]}>
               Paid
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, statusFilter === 'pending' && styles.filterChipActive]}
+            style={[
+              styles.filterChip,
+              { backgroundColor: statusFilter === 'pending' ? colors.danger : colors.chipBg },
+            ]}
             onPress={() => setStatusFilter('pending')}>
-            <Text style={[styles.filterChipText, statusFilter === 'pending' && styles.filterChipTextActive]}>
+            <Text
+              style={[
+                styles.filterChipText,
+                { color: statusFilter === 'pending' ? '#ffffff' : colors.textSecondary },
+              ]}>
               Pending
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Customer List */}
+      {/* Customer List with 12-Month Calendar Grid */}
       <ScrollView
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[styles.listContainer, { paddingBottom: 32 }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => fetchGridData(true)} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchGridData(true)}
+            tintColor={colors.primary}
+          />
         }>
         {loading && !refreshing ? (
           <View style={styles.loaderBox}>
-            <ActivityIndicator size="large" color="#2563eb" />
-            <Text style={styles.loaderText}>Loading subscribers...</Text>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loaderText, { color: colors.textSecondary }]}>
+              Loading calendar grid...
+            </Text>
           </View>
         ) : filteredCustomers.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Text style={styles.emptyTitle}>No Customers Found</Text>
-            <Text style={styles.emptySub}>
-              {searchQuery ? 'Try matching another name or number' : 'Click "+ Add Customer" above to add'}
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No Subscribers Found</Text>
+            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+              {searchQuery ? 'Try another name or mobile' : 'Tap "+ Add" to create your first subscriber'}
             </Text>
           </View>
         ) : (
           filteredCustomers.map((cust) => {
-            const entry = cust.entries?.[selectedFullMonth];
-            const isPaid = entry?.paymentStatus === 'PAID';
-            const amount = entry?.amount !== undefined ? entry.amount : 300;
-
             return (
-              <View key={cust._id} style={styles.customerCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.nameBlock}>
-                    <Text style={styles.custName}>{cust.name}</Text>
-                    <Text style={styles.custMobile}>{cust.mobile}</Text>
+              <View
+                key={cust._id}
+                style={[
+                  styles.customerCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.cardBorder,
+                  },
+                ]}>
+                {/* Subscriber Card Header */}
+                <View style={styles.cardTopRow}>
+                  <View style={styles.subscriberInfo}>
+                    <Text style={[styles.custName, { color: colors.text }]}>{cust.name}</Text>
+                    <Text style={[styles.custMobile, { color: colors.textSecondary }]}>
+                      {cust.mobile}
+                    </Text>
                   </View>
 
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      isPaid ? styles.statusBadgePaid : styles.statusBadgePending,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.statusBadgeText,
-                        isPaid ? styles.statusBadgeTextPaid : styles.statusBadgeTextPending,
-                      ]}>
-                      {isPaid ? `✓ Paid ${formatCurrency(amount)}` : `⏳ Due ${formatCurrency(amount)}`}
-                    </Text>
+                  <View style={styles.cardHeaderActions}>
+                    <TouchableOpacity
+                      style={[styles.smallBtn, { backgroundColor: colors.chipBg }]}
+                      onPress={() => handleOpenHistory(cust)}>
+                      <Text style={[styles.smallBtnText, { color: colors.primary }]}>📜 History</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.smallIconBtn, { backgroundColor: colors.chipBg }]}
+                      onPress={() => setEditCustomer(cust)}>
+                      <Text style={{ fontSize: 13 }}>⚙️</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {entry?.remarks ? (
-                  <Text style={styles.remarksText}>Note: {entry.remarks}</Text>
-                ) : null}
+                {/* 12-Month Interactive Calendar Grid */}
+                <Text style={[styles.gridNotice, { color: colors.textMuted }]}>
+                  Tap any month to record / update collection:
+                </Text>
+                <View style={styles.calendarGrid}>
+                  {MONTH_NAMES.map((m) => {
+                    const monthKey = `${selectedYear}-${m.num}`;
+                    const entry = cust.entries?.[monthKey];
+                    const isFuture = monthKey > currentYearMonth;
+                    const isCurrent = monthKey === currentYearMonth;
+                    const isPaid = entry?.paymentStatus === 'PAID';
+                    const isPending = entry?.paymentStatus === 'PENDING' || (!isPaid && !isFuture);
 
-                {/* Actions Footer */}
-                <View style={styles.cardActions}>
-                  <TouchableOpacity
-                    style={styles.actionCollectBtn}
-                    onPress={() => handleOpenEntry(cust)}>
-                    <Text style={styles.actionCollectText}>
-                      {isPaid ? '✏️ Edit Payment' : '₹ Record Collection'}
-                    </Text>
-                  </TouchableOpacity>
+                    let cellBg = colors.chipBg;
+                    let textColor = colors.textSecondary;
+                    let badgeLabel = '';
 
-                  <TouchableOpacity
-                    style={styles.actionHistoryBtn}
-                    onPress={() => handleOpenHistory(cust)}>
-                    <Text style={styles.actionHistoryText}>📜 History</Text>
-                  </TouchableOpacity>
+                    if (isFuture) {
+                      cellBg = isDark ? '#1a2234' : '#f1f5f9';
+                      textColor = colors.textMuted;
+                    } else if (isPaid) {
+                      cellBg = isDark ? '#064e3b' : '#dcfce7';
+                      textColor = isDark ? '#a7f3d0' : '#15803d';
+                      badgeLabel = entry?.amount ? `₹${entry.amount}` : 'PAID';
+                    } else if (isPending) {
+                      cellBg = isDark ? '#7f1d1d' : '#fee2e2';
+                      textColor = isDark ? '#fca5a5' : '#b91c1c';
+                      badgeLabel = 'DUE';
+                    }
 
-                  <TouchableOpacity
-                    style={styles.actionEditBtn}
-                    onPress={() => setEditCustomer(cust)}>
-                    <Text style={styles.actionEditText}>⚙️</Text>
-                  </TouchableOpacity>
+                    return (
+                      <TouchableOpacity
+                        key={m.num}
+                        disabled={isFuture}
+                        style={[
+                          styles.monthCell,
+                          {
+                            backgroundColor: cellBg,
+                            borderColor: isCurrent ? colors.primary : colors.cardBorder,
+                            borderWidth: isCurrent ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => handleCellClick(cust, monthKey)}>
+                        <Text
+                          style={[
+                            styles.monthCellLabel,
+                            { color: textColor },
+                            isCurrent && { fontWeight: '800' },
+                          ]}>
+                          {m.short}
+                        </Text>
+                        <Text style={[styles.monthCellAmount, { color: textColor }]}>
+                          {isFuture ? '—' : badgeLabel}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
             );
@@ -362,30 +494,59 @@ export const CollectionScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    elevation: 2,
+  },
+  headerLeft: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#0f172a',
   },
-  headerSub: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 1,
+  yearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  yearArrow: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  yearArrowDisabled: {
+    opacity: 0.4,
+  },
+  yearArrowText: {
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  yearText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  themeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addBtn: {
-    backgroundColor: '#2563eb',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
@@ -395,81 +556,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  monthTabsContainer: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  monthTabsScroll: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  monthTab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: '#f1f5f9',
-  },
-  monthTabActive: {
-    backgroundColor: '#2563eb',
-  },
-  monthTabText: {
-    fontSize: 13,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  monthTabTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
-  },
   summaryStrip: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
     justifyContent: 'space-between',
   },
   summaryItem: {
     alignItems: 'center',
     flex: 1,
   },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: '#cbd5e1',
+    opacity: 0.5,
+  },
   summaryLabel: {
     fontSize: 11,
-    color: '#64748b',
     fontWeight: '500',
   },
-  summaryValue: {
+  summaryVal: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0f172a',
     marginTop: 2,
   },
-  summaryPaid: {
-    color: '#16a34a',
-  },
-  summaryPending: {
-    color: '#dc2626',
-  },
-  filterSection: {
+  filterBox: {
     padding: 12,
-    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
   },
   searchInput: {
-    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 13,
-    color: '#0f172a',
   },
-  filterRow: {
+  filterChipRow: {
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
@@ -478,23 +601,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
-  },
-  filterChipActive: {
-    backgroundColor: '#0f172a',
   },
   filterChipText: {
     fontSize: 12,
-    color: '#475569',
-    fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
+    fontWeight: '600',
   },
   listContainer: {
     padding: 12,
-    paddingBottom: 32,
   },
   loaderBox: {
     padding: 40,
@@ -502,7 +615,6 @@ const styles = StyleSheet.create({
   },
   loaderText: {
     marginTop: 10,
-    color: '#64748b',
     fontSize: 14,
   },
   emptyBox: {
@@ -512,112 +624,82 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#334155',
   },
   emptySub: {
     fontSize: 13,
-    color: '#94a3b8',
     marginTop: 4,
   },
   customerCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
     elevation: 2,
   },
-  cardHeader: {
+  cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  nameBlock: {
+  subscriberInfo: {
     flex: 1,
   },
   custName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0f172a',
   },
   custMobile: {
     fontSize: 13,
-    color: '#64748b',
     marginTop: 2,
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  statusBadgePaid: {
-    backgroundColor: '#dcfce7',
-  },
-  statusBadgePending: {
-    backgroundColor: '#fee2e2',
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  statusBadgeTextPaid: {
-    color: '#15803d',
-  },
-  statusBadgeTextPending: {
-    color: '#b91c1c',
-  },
-  remarksText: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  cardActions: {
+  cardHeaderActions: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
     alignItems: 'center',
   },
-  actionCollectBtn: {
-    flex: 2,
-    paddingVertical: 8,
+  smallBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 6,
-    backgroundColor: '#eff6ff',
-    alignItems: 'center',
   },
-  actionCollectText: {
-    fontSize: 13,
-    color: '#2563eb',
-    fontWeight: '700',
-  },
-  actionHistoryBtn: {
-    flex: 1.2,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-  },
-  actionHistoryText: {
-    fontSize: 13,
-    color: '#334155',
+  smallBtnText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  actionEditBtn: {
-    width: 36,
-    height: 36,
+  smallIconBtn: {
+    width: 28,
+    height: 28,
     borderRadius: 6,
-    backgroundColor: '#f8fafc',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
   },
-  actionEditText: {
-    fontSize: 15,
+  gridNotice: {
+    fontSize: 11,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'space-between',
+  },
+  monthCell: {
+    width: '15%',
+    minWidth: 46,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthCellLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  monthCellAmount: {
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 1,
   },
 });
 
