@@ -177,7 +177,8 @@ export const LoginScreen = () => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      enabled={Platform.OS === 'ios'}>
       <StatusBar barStyle="light-content" />
 
       {/* Deep Cyber Gradient Background Base */}
@@ -214,11 +215,13 @@ export const LoginScreen = () => {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: Math.max(insets.top, 24) + 20,
-            paddingBottom: Math.max(insets.bottom, 24) + 20,
+            paddingTop: Math.max(insets.top, 24) + 16,
+            paddingBottom: Math.max(insets.bottom, 24) + 24,
           },
         ]}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
+        showsVerticalScrollIndicator={false}>
         {/* Animated Card with Shake & Fade Physics */}
         <Animated.View
           style={[
@@ -274,6 +277,11 @@ export const LoginScreen = () => {
                 value={identifier}
                 onChangeText={setIdentifier}
                 autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                importantForAutofill="no"
+                textContentType="none"
+                blurOnSubmit={false}
                 onFocus={() => setIdentifierFocused(true)}
                 onBlur={() => setIdentifierFocused(false)}
               />
@@ -296,6 +304,12 @@ export const LoginScreen = () => {
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                importantForAutofill="no"
+                textContentType="none"
+                blurOnSubmit={false}
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
               />
@@ -528,7 +542,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 8,
-    elevation: 3,
   },
   inputIcon: {
     fontSize: 16,
