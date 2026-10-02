@@ -4,22 +4,19 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
   Animated,
   Easing,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-
-const { width, height } = Dimensions.get('window');
 
 export const LoginScreen = () => {
   const insets = useSafeAreaInsets();
@@ -36,9 +33,13 @@ export const LoginScreen = () => {
   const [identifierFocused, setIdentifierFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
+  // Input references so tapping anywhere on the box immediately focuses the input
+  const identifierInputRef = useRef<any>(null);
+  const passwordInputRef = useRef<any>(null);
+
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
@@ -52,7 +53,7 @@ export const LoginScreen = () => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 700,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
@@ -67,7 +68,7 @@ export const LoginScreen = () => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.06,
+          toValue: 1.05,
           duration: 1800,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
@@ -174,17 +175,18 @@ export const LoginScreen = () => {
     setErrorMessage(null);
   };
 
+  const RootContainer = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
+  const rootProps = Platform.OS === 'ios' ? { behavior: 'padding' as const } : {};
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      enabled={Platform.OS === 'ios'}>
+    <RootContainer style={styles.container} {...rootProps}>
       <StatusBar barStyle="light-content" />
 
-      {/* Deep Cyber Gradient Background Base */}
-      <View style={styles.deepBg}>
+      {/* Deep Cyber Gradient Background Base - pointerEvents none ensures touches pass through */}
+      <View style={styles.deepBg} pointerEvents="none">
         {/* Glowing Ambient Mesh Orbs */}
         <Animated.View
+          pointerEvents="none"
           style={[
             styles.glowOrbTeal,
             {
@@ -193,6 +195,7 @@ export const LoginScreen = () => {
           ]}
         />
         <Animated.View
+          pointerEvents="none"
           style={[
             styles.glowOrbBlue,
             {
@@ -200,14 +203,15 @@ export const LoginScreen = () => {
             },
           ]}
         />
-        <View style={styles.gridOverlay} />
+        <View style={styles.gridOverlay} pointerEvents="none" />
       </View>
 
       {/* Floating Theme Mode Toggle */}
       <TouchableOpacity
         style={[styles.themeBtn, { top: Math.max(insets.top, 16) }]}
         onPress={toggleTheme}
-        activeOpacity={0.8}>
+        activeOpacity={0.8}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
         <Text style={styles.themeIcon}>{isDark ? '☀️' : '🌙'}</Text>
       </TouchableOpacity>
 
@@ -215,12 +219,11 @@ export const LoginScreen = () => {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: Math.max(insets.top, 24) + 16,
-            paddingBottom: Math.max(insets.bottom, 24) + 24,
+            paddingTop: Math.max(insets.top, 24) + 30,
+            paddingBottom: Math.max(insets.bottom, 24) + 40,
           },
         ]}
-        keyboardShouldPersistTaps="always"
-        keyboardDismissMode="none"
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         {/* Animated Card with Shake & Fade Physics */}
         <Animated.View
@@ -249,7 +252,7 @@ export const LoginScreen = () => {
           <Text style={styles.appSubtitle}>Network & Field Collection Portal</Text>
 
           {/* Quick Demo Pill */}
-          <TouchableOpacity style={styles.demoPill} onPress={fillDemoAdmin}>
+          <TouchableOpacity style={styles.demoPill} onPress={fillDemoAdmin} activeOpacity={0.8}>
             <Text style={styles.demoPillText}>⚡ Auto-fill Admin Login</Text>
           </TouchableOpacity>
 
@@ -264,13 +267,15 @@ export const LoginScreen = () => {
           {/* Input 1: Identifier / Mobile / Email */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>IDENTIFIER / USERNAME / MOBILE</Text>
-            <View
+            <Pressable
               style={[
                 styles.inputWrapper,
                 identifierFocused && styles.inputWrapperFocused,
-              ]}>
+              ]}
+              onPress={() => identifierInputRef.current?.focus()}>
               <Text style={styles.inputIcon}>👤</Text>
               <TextInput
+                ref={identifierInputRef}
                 style={styles.textInput}
                 placeholder="e.g. admin or 9876543210"
                 placeholderTextColor="#64748b"
@@ -279,25 +284,27 @@ export const LoginScreen = () => {
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoComplete="off"
+                underlineColorAndroid="transparent"
                 importantForAutofill="no"
                 textContentType="none"
-                blurOnSubmit={false}
                 onFocus={() => setIdentifierFocused(true)}
                 onBlur={() => setIdentifierFocused(false)}
               />
-            </View>
+            </Pressable>
           </View>
 
           {/* Input 2: Password */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>PASSWORD</Text>
-            <View
+            <Pressable
               style={[
                 styles.inputWrapper,
                 passwordFocused && styles.inputWrapperFocused,
-              ]}>
+              ]}
+              onPress={() => passwordInputRef.current?.focus()}>
               <Text style={styles.inputIcon}>🔒</Text>
               <TextInput
+                ref={passwordInputRef}
                 style={styles.textInput}
                 placeholder="Enter your password"
                 placeholderTextColor="#64748b"
@@ -307,9 +314,9 @@ export const LoginScreen = () => {
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoComplete="off"
+                underlineColorAndroid="transparent"
                 importantForAutofill="no"
                 textContentType="none"
-                blurOnSubmit={false}
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
               />
@@ -328,7 +335,7 @@ export const LoginScreen = () => {
                   </Text>
                 </View>
               </TouchableOpacity>
-            </View>
+            </Pressable>
           </View>
 
           {/* Animated Login Action Button */}
@@ -359,7 +366,7 @@ export const LoginScreen = () => {
           </View>
         </Animated.View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </RootContainer>
   );
 };
 
@@ -422,7 +429,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: 20,
   },
   cardContainer: {
@@ -434,7 +440,7 @@ const styles = StyleSheet.create({
     padding: 26,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    elevation: 12,
+    elevation: 8,
     shadowColor: '#000',
     shadowOpacity: 0.5,
     shadowOffset: { width: 0, height: 10 },
@@ -486,7 +492,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(45, 212, 191, 0.35)',
     paddingHorizontal: 14,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 20,
     marginBottom: 20,
   },
@@ -549,6 +555,7 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+    height: '100%',
     fontSize: 15,
     color: '#f8fafc',
     paddingVertical: 0,
