@@ -4,7 +4,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from '../screens/auth/LoginScreen';
-import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
+import { MainTabs } from './MainTabs';
+import { CustomerHistoryScreen } from '../screens/collection/CustomerHistoryScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -23,7 +24,10 @@ export const RootNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {token ? (
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          <>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="CustomerHistory" component={CustomerHistoryScreen} />
+          </>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
         )}
@@ -40,3 +44,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
 });
+
+export default RootNavigator;
