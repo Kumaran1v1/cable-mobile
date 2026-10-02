@@ -6,13 +6,12 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   Linking,
-  Alert,
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { dashboardApi } from '../../api/dashboardApi';
 import { DashboardSummaryData, UnpaidCustomerItem } from '../../types/dashboard.types';
@@ -24,10 +23,16 @@ import {
 } from '../../utils/format';
 import { WhatsAppReminderModal } from '../../components/WhatsAppReminderModal';
 import { MonthlyEntryModal } from '../../components/MonthlyEntryModal';
+import { YouTubeHeader } from '../../components/YouTubeHeader';
+import {
+  DashboardSkeleton,
+  YouTubeTopProgressBar,
+} from '../../components/YouTubeSkeleton';
 
 export const DashboardScreen = () => {
   const insets = useSafeAreaInsets();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const navigation = useNavigation<any>();
+  const { colors, isDark } = useTheme();
 
   const currentMonthStr = getCurrentMonthString();
   const currentYear = currentMonthStr.split('-')[0];
@@ -37,6 +42,7 @@ export const DashboardScreen = () => {
   const [data, setData] = useState<DashboardSummaryData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Modals
@@ -45,16 +51,27 @@ export const DashboardScreen = () => {
 
   const fetchSummary = useCallback(
     async (isRefresh = false) => {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setLoadError(null);
 
       try {
         const res = await dashboardApi.getSummary(selectedYear, selectedMonth);
         if (res.success && res.data) {
           setData(res.data);
+          setLoadError(null);
+        } else {
+          setLoadError('No data returned from server.');
         }
       } catch (err: any) {
-        Alert.alert('Error', err?.response?.data?.message || err?.message || 'Failed to load dashboard');
+        const msg =
+          err?.response?.data?.message ||
+          err?.message ||
+          'Server connecting or warming up...';
+        setLoadError(msg);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -63,9 +80,19 @@ export const DashboardScreen = () => {
     [selectedYear, selectedMonth]
   );
 
+  // Initial load
   useEffect(() => {
     fetchSummary();
   }, [fetchSummary]);
+
+  // Screen focus re-verification (ensures data is populated if first attempt hit Render cold start)
+  useFocusEffect(
+    useCallback(() => {
+      if (!data && !loading) {
+        fetchSummary();
+      }
+    }, [data, loading, fetchSummary])
+  );
 
   const handlePrevMonth = () => {
     const prev = getOffsetMonthString(selectedMonth, -1);
@@ -78,6 +105,10 @@ export const DashboardScreen = () => {
     const next = getOffsetMonthString(selectedMonth, 1);
     setSelectedMonth(next);
     setSelectedYear(next.split('-')[0]);
+  };
+
+  const handleNavigateTab = (tabName: string) => {
+    navigation.navigate(tabName);
   };
 
   const filteredUnpaid = useMemo(() => {
@@ -93,78 +124,59 @@ export const DashboardScreen = () => {
     Linking.openURL(`tel:${mobile}`);
   };
 
+  const isCurrentOrFuture = selectedMonth >= currentMonthStr;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* Top Safe Area Navigator Header */}
-      <View
-        style={[
-          styles.navHeader,
-          {
-            paddingTop: Math.max(insets.top, 12),
-            backgroundColor: colors.headerBg,
-            borderBottomColor: colors.cardBorder,
-          },
-        ]}>
-        <TouchableOpacity
-          style={[styles.navArrow, { backgroundColor: colors.chipBg }]}
-          onPress={handlePrevMonth}>
-          <Text style={[styles.navArrowText, { color: colors.primary }]}>‹</Text>
-        </TouchableOpacity>
+      {/* YouTube Style App Header with Sidebar Drawer & Profile Avatar */}
+      <YouTubeHeader
+        onNavigateTab={handleNavigateTab}
+        title={formatMonthYear(selectedMonth)}
+        subtitle="Performance & Collections"
+        showMonthNavigator={true}
+        selectedMonth={selectedMonth}
+        onPrevMonth={handlePrevMonth}
+        onNextMonth={handleNextMonth}
+        canNextMonth={!isCurrentOrFuture}
+      />
 
-        <View style={styles.navTitleContainer}>
-          <Text style={[styles.navMonthText, { color: colors.text }]}>
-            {formatMonthYear(selectedMonth)}
-          </Text>
-          <Text style={[styles.navSubText, { color: colors.textSecondary }]}>
-            Performance & Collections
-          </Text>
-        </View>
+      {/* YouTube Red Animated Progress Bar */}
+      <YouTubeTopProgressBar active={loading || refreshing} />
 
-        <View style={styles.navRightRow}>
+      {/* Render Server Cold-Start / Retry Banner */}
+      {loadError && !loading && (
+        <View style={styles.errorBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.errorTitle}>⚡ Connection Notice</Text>
+            <Text style={styles.errorMessage}>{loadError}</Text>
+          </View>
           <TouchableOpacity
-            style={[
-              styles.navArrow,
-              { backgroundColor: colors.chipBg },
-              selectedMonth >= currentMonthStr && styles.navArrowDisabled,
-            ]}
-            onPress={handleNextMonth}
-            disabled={selectedMonth >= currentMonthStr}>
-            <Text
-              style={[
-                styles.navArrowText,
-                { color: selectedMonth >= currentMonthStr ? colors.textMuted : colors.primary },
-              ]}>
-              ›
-            </Text>
-          </TouchableOpacity>
-
-          {/* Dark Mode Toggle */}
-          <TouchableOpacity
-            style={[styles.themeBtn, { backgroundColor: colors.chipBg }]}
-            onPress={toggleTheme}>
-            <Text style={{ fontSize: 16 }}>{isDark ? '☀️' : '🌙'}</Text>
+            style={styles.retryBtn}
+            onPress={() => fetchSummary(false)}
+            activeOpacity={0.8}>
+            <Text style={styles.retryBtnText}>Retry Now</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 32 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 24) + 40 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => fetchSummary(true)}
             tintColor={colors.primary}
+            colors={['#ef4444', colors.primary]}
           />
         }>
-        {loading && !refreshing ? (
-          <View style={styles.loaderBox}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loaderText, { color: colors.textSecondary }]}>
-              Loading dashboard metrics...
-            </Text>
-          </View>
+        {/* YouTube Skeleton Shimmer Loader */}
+        {loading && !data ? (
+          <DashboardSkeleton />
         ) : (
           <>
             {/* KPI Cards Grid */}
@@ -173,7 +185,10 @@ export const DashboardScreen = () => {
               <View
                 style={[
                   styles.kpiCard,
-                  { backgroundColor: isDark ? '#172554' : '#eff6ff', borderLeftColor: colors.primary },
+                  {
+                    backgroundColor: isDark ? '#172554' : '#eff6ff',
+                    borderLeftColor: colors.primary,
+                  },
                 ]}>
                 <Text style={[styles.kpiLabel, { color: isDark ? '#93c5fd' : '#475569' }]}>
                   Total Subscribers
@@ -190,7 +205,10 @@ export const DashboardScreen = () => {
               <View
                 style={[
                   styles.kpiCard,
-                  { backgroundColor: isDark ? '#052e16' : '#f0fdf4', borderLeftColor: colors.success },
+                  {
+                    backgroundColor: isDark ? '#052e16' : '#f0fdf4',
+                    borderLeftColor: colors.success,
+                  },
                 ]}>
                 <Text style={[styles.kpiLabel, { color: isDark ? '#86efac' : '#475569' }]}>
                   Collected This Month
@@ -207,7 +225,10 @@ export const DashboardScreen = () => {
               <View
                 style={[
                   styles.kpiCard,
-                  { backgroundColor: isDark ? '#450a0a' : '#fef2f2', borderLeftColor: colors.danger },
+                  {
+                    backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                    borderLeftColor: colors.danger,
+                  },
                 ]}>
                 <Text style={[styles.kpiLabel, { color: isDark ? '#fca5a5' : '#475569' }]}>
                   Pending This Month
@@ -224,7 +245,10 @@ export const DashboardScreen = () => {
               <View
                 style={[
                   styles.kpiCard,
-                  { backgroundColor: isDark ? '#3b0764' : '#faf5ff', borderLeftColor: '#9333ea' },
+                  {
+                    backgroundColor: isDark ? '#3b0764' : '#faf5ff',
+                    borderLeftColor: '#9333ea',
+                  },
                 ]}>
                 <Text style={[styles.kpiLabel, { color: isDark ? '#d8b4fe' : '#475569' }]}>
                   1-Year Total Collection
@@ -245,10 +269,21 @@ export const DashboardScreen = () => {
                   styles.sectionCard,
                   { backgroundColor: colors.card, borderColor: colors.cardBorder },
                 ]}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Monthly Overview ({selectedYear})
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.overviewScroll}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                    Monthly Overview ({selectedYear})
+                  </Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('CollectionTab')}>
+                    <Text style={[styles.viewAllLink, { color: colors.primary }]}>
+                      12M Matrix →
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.overviewScroll}>
                   {data.monthlyOverview.map((item) => (
                     <View
                       key={item.month}
@@ -257,7 +292,9 @@ export const DashboardScreen = () => {
                         {
                           backgroundColor:
                             item.month === selectedMonth
-                              ? isDark ? '#1e293b' : '#eff6ff'
+                              ? isDark
+                                ? '#1e293b'
+                                : '#eff6ff'
                               : colors.chipBg,
                           borderColor:
                             item.month === selectedMonth ? colors.primary : colors.cardBorder,
@@ -301,7 +338,8 @@ export const DashboardScreen = () => {
                   Unpaid Subscribers
                 </Text>
                 <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
-                  {filteredUnpaid.length} customers with pending balance for {formatMonthYear(selectedMonth)}
+                  {filteredUnpaid.length} customers with pending balance for{' '}
+                  {formatMonthYear(selectedMonth)}
                 </Text>
               </View>
 
@@ -338,28 +376,44 @@ export const DashboardScreen = () => {
                         borderColor: colors.cardBorder,
                       },
                     ]}>
-                    <View style={styles.custInfo}>
-                      <Text style={[styles.custName, { color: colors.text }]}>{cust.name}</Text>
-                      <Text style={[styles.custMobile, { color: colors.textSecondary }]}>
-                        {cust.mobile}
-                      </Text>
-                      <Text style={[styles.custDue, { color: colors.danger }]}>
-                        Due: {formatCurrency(cust.amount || 300)}
-                      </Text>
+                    <View style={styles.custHeader}>
+                      <View style={[styles.custAvatar, { backgroundColor: colors.chipBg }]}>
+                        <Text style={[styles.custAvatarText, { color: colors.primary }]}>
+                          {cust.name.substring(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.custInfo}>
+                        <Text style={[styles.custName, { color: colors.text }]}>
+                          {cust.name}
+                        </Text>
+                        <Text style={[styles.custMobile, { color: colors.textSecondary }]}>
+                          {cust.mobile}
+                        </Text>
+                      </View>
+                      <View style={styles.custDueBadge}>
+                        <Text style={styles.custDueBadgeText}>
+                          Due: {formatCurrency(cust.amount || 300)}
+                        </Text>
+                      </View>
                     </View>
 
                     <View style={styles.actionRow}>
                       <TouchableOpacity
                         style={[styles.callActionBtn, { backgroundColor: colors.chipBg }]}
-                        onPress={() => handleCall(cust.mobile)}>
+                        onPress={() => handleCall(cust.mobile)}
+                        activeOpacity={0.7}>
                         <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>
                           📞 Call
                         </Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.whatsappActionBtn, { backgroundColor: colors.successBg }]}
-                        onPress={() => setWhatsAppModalCust(cust)}>
+                        style={[
+                          styles.whatsappActionBtn,
+                          { backgroundColor: colors.successBg },
+                        ]}
+                        onPress={() => setWhatsAppModalCust(cust)}
+                        activeOpacity={0.7}>
                         <Text style={[styles.whatsappActionText, { color: colors.success }]}>
                           💬 WhatsApp
                         </Text>
@@ -367,7 +421,8 @@ export const DashboardScreen = () => {
 
                       <TouchableOpacity
                         style={[styles.collectActionBtn, { backgroundColor: colors.primary }]}
-                        onPress={() => setEntryModalCust(cust)}>
+                        onPress={() => setEntryModalCust(cust)}
+                        activeOpacity={0.8}>
                         <Text style={styles.collectActionText}>₹ Collect</Text>
                       </TouchableOpacity>
                     </View>
@@ -411,63 +466,42 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  navHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    elevation: 2,
-  },
-  navArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navArrowDisabled: {
-    opacity: 0.3,
-  },
-  navArrowText: {
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-  navTitleContainer: {
-    alignItems: 'center',
-  },
-  navMonthText: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  navSubText: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  navRightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  themeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   scrollContent: {
     padding: 16,
   },
-  loaderBox: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  loaderText: {
+  errorBanner: {
+    marginHorizontal: 16,
     marginTop: 12,
-    fontSize: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  errorTitle: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  errorMessage: {
+    color: '#f87171',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  retryBtn: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   kpiGrid: {
     flexDirection: 'row',
@@ -478,10 +512,14 @@ const styles = StyleSheet.create({
   kpiCard: {
     flex: 1,
     minWidth: '46%',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     elevation: 2,
     borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
   },
   kpiLabel: {
     fontSize: 12,
@@ -496,14 +534,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   sectionCard: {
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectionTitle: {
     fontSize: 16,
+    fontWeight: '700',
+  },
+  viewAllLink: {
+    fontSize: 12,
     fontWeight: '700',
   },
   sectionSub: {
@@ -515,7 +566,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   overviewItem: {
-    width: 100,
+    width: 105,
     borderRadius: 10,
     padding: 10,
     marginRight: 10,
@@ -543,9 +594,9 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     fontSize: 14,
     marginBottom: 12,
   },
@@ -559,12 +610,30 @@ const styles = StyleSheet.create({
   },
   custCard: {
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    elevation: 1,
+  },
+  custHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 10,
   },
+  custAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  custAvatarText: {
+    fontWeight: '800',
+    fontSize: 13,
+  },
   custInfo: {
-    marginBottom: 8,
+    flex: 1,
+    marginLeft: 10,
   },
   custName: {
     fontSize: 15,
@@ -574,10 +643,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 1,
   },
-  custDue: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 2,
+  custDueBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  custDueBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ef4444',
   },
   actionRow: {
     flexDirection: 'row',
@@ -586,8 +661,8 @@ const styles = StyleSheet.create({
   },
   callActionBtn: {
     flex: 1,
-    paddingVertical: 7,
-    borderRadius: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
     alignItems: 'center',
   },
   actionBtnText: {
@@ -596,8 +671,8 @@ const styles = StyleSheet.create({
   },
   whatsappActionBtn: {
     flex: 1.4,
-    paddingVertical: 7,
-    borderRadius: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
     alignItems: 'center',
   },
   whatsappActionText: {
@@ -606,8 +681,8 @@ const styles = StyleSheet.create({
   },
   collectActionBtn: {
     flex: 1.2,
-    paddingVertical: 7,
-    borderRadius: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
     alignItems: 'center',
   },
   collectActionText: {

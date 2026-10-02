@@ -11,7 +11,7 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { collectionApi } from '../../api/collectionApi';
@@ -20,6 +20,8 @@ import { formatCurrency, formatMonthYear, getCurrentMonthString } from '../../ut
 import { CreateCustomerModal } from '../../components/CreateCustomerModal';
 import { EditCustomerModal } from '../../components/EditCustomerModal';
 import { MonthlyEntryModal } from '../../components/MonthlyEntryModal';
+import { YouTubeHeader } from '../../components/YouTubeHeader';
+import { CollectionSkeleton, YouTubeTopProgressBar } from '../../components/YouTubeSkeleton';
 
 const MONTH_NAMES = [
   { num: '01', short: 'Jan', full: 'January' },
@@ -53,6 +55,7 @@ export const CollectionScreen = () => {
   >({});
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
 
@@ -79,13 +82,19 @@ export const CollectionScreen = () => {
     async (isRefresh = false) => {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
+      setLoadError(null);
 
       try {
         const res = await collectionApi.getYearGrid(selectedYear);
         setCustomers(res.data || []);
         setMonthSummaries(res.monthSummaries || {});
+        setLoadError(null);
       } catch (err: any) {
-        Alert.alert('Error', err?.response?.data?.message || err?.message || 'Failed to load collections');
+        const msg =
+          err?.response?.data?.message ||
+          err?.message ||
+          'Server connecting or warming up...';
+        setLoadError(msg);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -97,6 +106,15 @@ export const CollectionScreen = () => {
   useEffect(() => {
     fetchGridData();
   }, [fetchGridData]);
+
+  // Screen focus re-verification
+  useFocusEffect(
+    useCallback(() => {
+      if (customers.length === 0 && !loading) {
+        fetchGridData();
+      }
+    }, [customers.length, loading, fetchGridData])
+  );
 
   // Year navigation
   const handlePrevYear = () => {
@@ -179,59 +197,38 @@ export const CollectionScreen = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* Top Safe Area Header (Status Bar aware) */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: Math.max(insets.top, 12),
-            backgroundColor: colors.headerBg,
-            borderBottomColor: colors.cardBorder,
-          },
-        ]}>
-        <View style={styles.headerLeft}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Calendar Collections</Text>
-          <View style={styles.yearRow}>
-            <TouchableOpacity style={styles.yearArrow} onPress={handlePrevYear}>
-              <Text style={[styles.yearArrowText, { color: colors.primary }]}>‹</Text>
-            </TouchableOpacity>
-            <Text style={[styles.yearText, { color: colors.primary }]}>{selectedYear}</Text>
-            <TouchableOpacity
-              style={[
-                styles.yearArrow,
-                selectedYear >= currentYear && styles.yearArrowDisabled,
-              ]}
-              onPress={handleNextYear}
-              disabled={selectedYear >= currentYear}>
-              <Text
-                style={[
-                  styles.yearArrowText,
-                  { color: selectedYear >= currentYear ? colors.textMuted : colors.primary },
-                ]}>
-                ›
-              </Text>
-            </TouchableOpacity>
+      {/* YouTube Style App Header with Sidebar Drawer & Profile Avatar */}
+      <YouTubeHeader
+        onNavigateTab={(tab) => navigation.navigate(tab)}
+        title={selectedYear}
+        subtitle="12-Month Matrix"
+        showMonthNavigator={true}
+        selectedMonth={selectedYear}
+        onPrevMonth={handlePrevYear}
+        onNextMonth={handleNextYear}
+        canNextMonth={selectedYear < currentYear}
+      />
+
+      {/* YouTube Red Animated Progress Bar */}
+      <YouTubeTopProgressBar active={loading || refreshing} />
+
+      {/* Render Server Cold-Start / Retry Banner */}
+      {loadError && !loading && (
+        <View style={styles.errorBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.errorTitle}>⚡ Connection Notice</Text>
+            <Text style={styles.errorMessage}>{loadError}</Text>
           </View>
-        </View>
-
-        <View style={styles.headerRight}>
-          {/* Dark Mode Toggle Button */}
           <TouchableOpacity
-            style={[styles.themeBtn, { backgroundColor: colors.chipBg }]}
-            onPress={toggleTheme}>
-            <Text style={{ fontSize: 16 }}>{isDark ? '☀️' : '🌙'}</Text>
-          </TouchableOpacity>
-
-          {/* Add Customer Button */}
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: colors.primary }]}
-            onPress={() => setCreateModalVisible(true)}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+            style={styles.retryBtn}
+            onPress={() => fetchGridData(false)}
+            activeOpacity={0.8}>
+            <Text style={styles.retryBtnText}>Retry Now</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      )}
 
-      {/* Year Financial Summary Strip */}
+      {/* Year Financial Summary Strip with + Add Subscriber Action */}
       <View
         style={[
           styles.summaryStrip,
@@ -243,18 +240,24 @@ export const CollectionScreen = () => {
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Year Collected</Text>
+          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Collected</Text>
           <Text style={[styles.summaryVal, { color: colors.success }]}>
             {formatCurrency(yearTotalPaid)}
           </Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Year Pending</Text>
+          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Pending</Text>
           <Text style={[styles.summaryVal, { color: colors.danger }]}>
             {formatCurrency(yearTotalPending)}
           </Text>
         </View>
+        <TouchableOpacity
+          style={[styles.quickAddBtn, { backgroundColor: colors.primary }]}
+          onPress={() => setCreateModalVisible(true)}
+          activeOpacity={0.8}>
+          <Text style={styles.quickAddBtnText}>+ Add</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Search & Filter Bar */}
@@ -328,21 +331,20 @@ export const CollectionScreen = () => {
 
       {/* Customer List with 12-Month Calendar Grid */}
       <ScrollView
-        contentContainerStyle={[styles.listContainer, { paddingBottom: 32 }]}
+        contentContainerStyle={[
+          styles.listContainer,
+          { paddingBottom: Math.max(insets.bottom, 24) + 40 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => fetchGridData(true)}
             tintColor={colors.primary}
+            colors={['#ef4444', colors.primary]}
           />
         }>
-        {loading && !refreshing ? (
-          <View style={styles.loaderBox}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loaderText, { color: colors.textSecondary }]}>
-              Loading calendar grid...
-            </Text>
-          </View>
+        {loading && !refreshing && customers.length === 0 ? (
+          <CollectionSkeleton />
         ) : filteredCustomers.length === 0 ? (
           <View style={styles.emptyBox}>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No Subscribers Found</Text>
@@ -700,6 +702,51 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     marginTop: 1,
+  },
+  errorBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  errorTitle: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  errorMessage: {
+    color: '#f87171',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  retryBtn: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  quickAddBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+  quickAddBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });
 

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserProfile, LoginRequest } from '../types/auth.types';
 import { authApi } from '../api/authApi';
 import { storage } from '../services/storage';
+import { setAuthToken } from '../api/client';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedToken = await storage.getToken();
         const storedUser = await storage.getUser();
         if (storedToken && storedUser) {
+          setAuthToken(storedToken);
           setToken(storedToken);
           setUser(storedUser);
         }
@@ -40,8 +42,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (credentials: LoginRequest) => {
     const res = await authApi.login(credentials);
     if (res.success && res.token) {
+      // 1. Immediately cache token in memory so all immediate subsequent API calls are authorized
+      setAuthToken(res.token);
+      // 2. Persist to storage
       await storage.saveToken(res.token);
       await storage.saveUser(res.user);
+      // 3. Update React context state
       setToken(res.token);
       setUser(res.user);
     } else {
@@ -50,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    setAuthToken(null);
     await storage.clear();
     setToken(null);
     setUser(null);

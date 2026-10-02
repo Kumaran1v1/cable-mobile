@@ -15,6 +15,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { userApi } from '../../api/userApi';
 import { BASE_URL } from '../../config/env';
+import { YouTubeHeader } from '../../components/YouTubeHeader';
 
 export const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
@@ -73,24 +74,10 @@ export const ProfileScreen = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* Top Safe Area Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: Math.max(insets.top, 12),
-            backgroundColor: colors.headerBg,
-            borderBottomColor: colors.cardBorder,
-          },
-        ]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Operator Profile</Text>
-
-        <TouchableOpacity
-          style={[styles.themeBtn, { backgroundColor: colors.chipBg }]}
-          onPress={toggleTheme}>
-          <Text style={{ fontSize: 16 }}>{isDark ? '☀️' : '🌙'}</Text>
-        </TouchableOpacity>
-      </View>
+      {/* YouTube Style App Header with Sidebar Drawer & Profile Avatar */}
+      <YouTubeHeader
+        subtitle="Operator Account"
+      />
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 }]}>
         {/* Profile Card Header */}
