@@ -24,10 +24,6 @@ export const LoginScreen = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Focus state for glowing cyan borders
-  const [identifierFocused, setIdentifierFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
-
   const handleLogin = async () => {
     setErrorMessage(null);
 
@@ -79,6 +75,8 @@ export const LoginScreen = () => {
           },
         ]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
+        removeClippedSubviews={false}
         showsVerticalScrollIndicator={false}>
         {/* Static Card Container - No transform matrices on parent to ensure native Android IME stability */}
         <View style={styles.cardContainer}>
@@ -104,11 +102,7 @@ export const LoginScreen = () => {
           {/* Input 1: Identifier / Username / Mobile */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>IDENTIFIER / USERNAME / MOBILE</Text>
-            <View
-              style={[
-                styles.inputWrapper,
-                identifierFocused && styles.inputWrapperFocused,
-              ]}>
+            <View style={styles.inputWrapper}>
               <Text style={styles.inputIcon}>👤</Text>
               <TextInput
                 style={styles.textInput}
@@ -119,8 +113,6 @@ export const LoginScreen = () => {
                 autoCapitalize="none"
                 autoCorrect={false}
                 underlineColorAndroid="transparent"
-                onFocus={() => setIdentifierFocused(true)}
-                onBlur={() => setIdentifierFocused(false)}
               />
             </View>
           </View>
@@ -128,11 +120,7 @@ export const LoginScreen = () => {
           {/* Input 2: Password */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>PASSWORD</Text>
-            <View
-              style={[
-                styles.inputWrapper,
-                passwordFocused && styles.inputWrapperFocused,
-              ]}>
+            <View style={styles.inputWrapper}>
               <Text style={styles.inputIcon}>🔒</Text>
               <TextInput
                 style={styles.textInput}
@@ -144,8 +132,6 @@ export const LoginScreen = () => {
                 autoCapitalize="none"
                 autoCorrect={false}
                 underlineColorAndroid="transparent"
-                onFocus={() => setPasswordFocused(true)}
-                onBlur={() => setPasswordFocused(false)}
               />
               <TouchableOpacity
                 style={styles.eyeBtn}
@@ -348,14 +334,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     height: 52,
-  },
-  inputWrapperFocused: {
-    borderColor: '#2dd4bf',
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-    shadowColor: '#2dd4bf',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 8,
   },
   inputIcon: {
     fontSize: 16,
